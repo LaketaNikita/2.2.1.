@@ -3,6 +3,8 @@ package hiber.dao;
 
 import hiber.model.Car;
 import hiber.model.User;
+import org.hibernate.HibernateError;
+import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
@@ -22,20 +24,27 @@ public class UserDaoImp implements UserDao {
    }
 
    @Override
-   @SuppressWarnings("unchecked")
    public List<User> listUsers() {
-      TypedQuery<User> query=sessionFactory.getCurrentSession().createQuery("from User");
+      TypedQuery<User> query = sessionFactory.getCurrentSession().createQuery("from User");
       return query.getResultList();
    }
    public User userModelCar(String model, int series) {
-      String HQL = "FROM User user" +
-              " LEFT OUTER JOIN FETCH user.car test" +
-              " WHERE test.model = :paramModel" +
-              " AND test.series = :paramSeries";
-      TypedQuery<User> query = sessionFactory.getCurrentSession().createQuery(HQL);
-      query.setParameter("paramModel", model);
-      query.setParameter("paramSeries", series);
-      return query.getSingleResult();
+      try (Session session = sessionFactory.openSession()) {
+         session.beginTransaction();
+
+         List<User> users = session.createQuery("from User where car.model = :modelParam and car.series = :seriesParam")
+                 .setParameter("modelParam", model)
+                 .setParameter("seriesParam", series)
+                 .list();
+
+         if (users.size() != 0) {
+            return users.get(0);
+         }
+      } catch (HibernateError e) {
+         sessionFactory.getCurrentSession().getTransaction().rollback();
+      }
+
+      return null;
    }
 
 }
